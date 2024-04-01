@@ -103,4 +103,14 @@ V13_Gastrointestinal_phyloseq <-
 V13_phyloseq <-
   merge_phyloseq(V13_oral_phyloseq, V13_skin_phyloseq, V13_Urogenital_phyloseq, V13_Airways_phyloseq, V13_Gastrointestinal_phyloseq)
 
-
+#Creates boxplots of the Alpha diversity measures with a legend
+richness_measures <-
+  c("Observed", "Shannon", "Simpson")
+V13_phyloseq %>%
+  plot_richness(x = "HMP_BODY_SITE", color = "HMP_BODY_SITE", measures = richness_measures) +
+  stat_boxplot(geom = "errorbar") +
+  geom_boxplot() +
+  scale_fill_manual(values = c("red", "blue", "green", "yellow", "purple"),  # Example colors
+                    labels = c("Body Site 1", "Body Site 2", "Body Site 3", "Body Site 4", "Body Site 5")) +  # Example labels
+  theme_bw() +
+  theme(axis.title.x = element_blank())
