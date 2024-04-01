@@ -72,6 +72,35 @@ V35_stool <-
 colData(V35_stool)
 rowData(V35_stool)
 
-
+#Subsetting
+V13_oral <-
+  V13() %>%
+  subset(select = HMP_BODY_SITE == "Oral")
+V13_skin <-
+  V13() %>%
+  subset(select = HMP_BODY_SITE == "Skin")
+V13_Urogenital<-
+  V13() %>%
+  subset(select = HMP_BODY_SITE == "Urogenital Tract")
+V13_Airways <-
+  V13() %>%
+  subset(select = HMP_BODY_SITE == "Airways")
+V13_Gastrointestinal<-
+  V13() %>%
+  subset(select = HMP_BODY_SITE == "Gastrointestinal Tract")
+#Creating phyloseq objects
+V13_oral_phyloseq <-
+  as_phyloseq(V13_oral)
+V13_skin_phyloseq <-
+  as_phyloseq(V13_skin)
+V13_Urogenital_phyloseq <-
+  as_phyloseq(V13_Urogenital)
+V13_Airways_phyloseq <-
+  as_phyloseq(V13_Airways)
+V13_Gastrointestinal_phyloseq <-
+  as_phyloseq(V13_Gastrointestinal)
+#Merging into one object
+V13_phyloseq <-
+  merge_phyloseq(V13_oral_phyloseq, V13_skin_phyloseq, V13_Urogenital_phyloseq, V13_Airways_phyloseq, V13_Gastrointestinal_phyloseq)
 
 
