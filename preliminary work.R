@@ -22,13 +22,13 @@ V13<-V13()
 
 
 
-v13metadata(V13()) # phyla tree
+v13metadata(V13()) # phyla tree, throwing an error
 
 head(rownames(V13))# name of the otu 
 head(colData(V13)) # more info for each participant 
 head(rowData(V13),n=10) #otu and the different taxonomic annotations 
 
- 
+
 
 #Exploratory data analysis
 #graph showing all the body sites collection in the package 
@@ -106,19 +106,19 @@ sample_samples <- function(x, size) {
 
 #sub-setting each body site phyloseq object is then sampled to contain only 50 samples
 V13_oral_phyloseq %<>%
-  sample_samples(50)
+  sample_samples(25)
 
 V13_skin_phyloseq %<>%
-  sample_samples(50)
+  sample_samples(25)
 
 V13_Urogenital_phyloseq %<>%
-  sample_samples(50)
+  sample_samples(25)
 
 V13_Airways_phyloseq %<>%
-  sample_samples(50)
+  sample_samples(25)
 
 V13_Gastrointestinal_phyloseq %<>%
-  sample_samples(50)
+  sample_samples(25)
 
 
 
@@ -133,8 +133,10 @@ V13_phyloseq %<>%
   is_greater_than(0) %>%
   prune_taxa(V13_phyloseq) # prune_taxa is a phyloseq object 
 
-
-plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'shannon')
+par(mfrow = c(1, 3))
+plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'Shannon')
+plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'Simpson')
+plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'Observed')
 
 #Alpha diversity using the richness_measures in the phyloseq package 
 richness_measures <-
@@ -159,6 +161,8 @@ cluster<- hclust(dist_matrix) %>%
   as.dendrogram()
 cluster_dendrogram <- as.dendrogram(cluster)
 
+
+
 #or  if phyloseq distance method doesn't work, 
 
 # Calculate the Bray-Curtis dissimilarity matrix
@@ -168,7 +172,7 @@ cluster2<-hclust(diss_matrix2)
 cluster_dendrogram2 <- as.dendrogram(cluster2)
 
 V13_sample_data<- as.data.frame(sample_data(V13_phyloseq)) #sample data of v13 object as a data frame 
-V13_sample_data<- na.omit(v13_sample_data) 
+
 #denogram
 #adding the col labels to the sample data frame for the dendrogram 
 ## Adding a color match to each body site in the sample data. color numbers can be gotten from https://www.color-hex.com/popular-colors.php
@@ -178,16 +182,63 @@ V13_sample_data$labels_col <- ifelse(V13_sample_data$HMP_BODY_SITE == "Oral", "#
                                                    ifelse(V13_sample_data$HMP_BODY_SITE == "Urogenital Tract", "#ffd700",
                                                           ifelse(V13_sample_data$HMP_BODY_SITE == "Skin", "#00ffff", "#00BFC4")))))
 
-plot(cluster_dendrogram2, label = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col)
+plot(cluster_dendrogram, label = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col) # The Bray Curtis is much neater
+
+# Get the OTU table or abundance data
+otu_table <- as.matrix(otu_table(V13_phyloseq))
+ 
+
+# Get the sample metadata
+sample_data <- sample_data(V13_phyloseq)
+
+
+# Convert dissimilarity matrix to a numeric matrix
+numeric_dist_matrix <- as.matrix(dist_matrix)
+
+# Plot heatmap of the numeric matrix
+heatmap(numeric_dist_matrix)
+
+# Convert into data frame of objects
+V13_sample_data_df <- as.data.frame(V13_sample_data)
+
+# Extract the data frame from the sample_data object
+V13_sample_data_df <- V13_sample_data_df@.Data
+
+
+V13_sample_data_df <- data.frame(V13_sample_data_df)
+
+
+# Extract the list components
+col1 <- V13_sample_data_df[[1]]
+col2 <- V13_sample_data_df[[2]]
+col3 <- V13_sample_data_df[[3]]
+col4 <- V13_sample_data_df[[4]]
+col5 <- V13_sample_data_df[[5]]
+col6 <- V13_sample_data_df[[6]]
+col7 <- V13_sample_data_df[[7]]
+col8 <- V13_sample_data_df[[8]]
+
+# Create a data frame with appropriate column names
+V13_sample_data_df <- data.frame(
+  RSID = col1,
+  VISITNO = col2,
+  SEX = col3,
+  RUN_CENTER = col4,
+  HMP_BODY_SITE = col5,
+  HMP_BODY_SUBSITE = col6,
+  SRS_SAMPLE_ID = col7,
+  labels_col = col8
+)
+
+
 
 
 # Perform PERMANOVA analysis to examine whether the groupings were statistically significant
-permanova_result <- adonis(diss_matrix ~ Study, data = sample_data(V13_phyloseq), strata = NULL, permutations = 999) # this is if distance method from phyloseq works, else use the one below
-permanova_result2 <- adonis(diss_matrix2 ~ Study, data = sample_data(V13_phyloseq), strata = NULL, permutations = 999)
+permanova_result <- adonis2(numeric_dist_matrix ~ as.factor(V13_sample_data_df$HMP_BODY_SITE), data = V13_sample_data_df, strata = NULL, permutations = 999) # this is if distance method from phyloseq works, else use the one below
 
 
 summary(permanova_result)
-summary(permanova_result2)
+
 
 
 
