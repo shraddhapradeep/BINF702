@@ -161,15 +161,15 @@ cluster<- hclust(dist_matrix) %>%
   as.dendrogram()
 cluster_dendrogram <- as.dendrogram(cluster)
 
-
+cluster_results <- hclust(dist_matrix)
 
 #or  if phyloseq distance method doesn't work, 
 
 # Calculate the Bray-Curtis dissimilarity matrix
-diss_matrix2 <- vegdist(otu_table(V13_phyloseq), method = "bray") #calculating distance using the distance function in the vegan package
-cluster2<-hclust(diss_matrix2)
+#diss_matrix2 <- vegdist(otu_table(V13_phyloseq), method = "bray") #calculating distance using the distance function in the vegan package
+#cluster2<-hclust(diss_matrix2)
 
-cluster_dendrogram2 <- as.dendrogram(cluster2)
+#cluster_dendrogram2 <- as.dendrogram(cluster2)
 
 V13_sample_data<- as.data.frame(sample_data(V13_phyloseq)) #sample data of v13 object as a data frame 
 
@@ -250,3 +250,9 @@ V13_phyloseq%>%
   plot_ordination(v13_ordinate,color = 'HMP_BODY_SITE', shape= 'HMP_BODY_SITE')+
   theme_bw()+
   theme(legend.position = 'bottom')
+
+#silhouette score 
+cluster_assignments <- cutree(cluster_results, 5) #cut into 5 for 5 groups 
+silhouette_scores <- silhouette(cluster_assignments, numeric_dist_matrix)
+summary(silhouette_scores)
+#1: well matched, 0 is close to decision boundary, -1 is could be in wrong cluster
