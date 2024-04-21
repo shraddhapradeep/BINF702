@@ -18,11 +18,12 @@ library(cluster)
 
 
 
+
 V13<-V13()
 
 
 
-v13metadata(V13()) # phyla tree, throwing an error
+v13metadata(V13) # phyla tree, throwing an error
 
 head(rownames(V13))# name of the otu 
 head(colData(V13)) # more info for each participant 
@@ -131,7 +132,7 @@ V13_phyloseq <-
 V13_phyloseq %<>%
   taxa_sums() %>%
   is_greater_than(0) %>%
-  prune_taxa(V13_phyloseq) # prune_taxa is a phyloseq object 
+  prune_taxa(V13_phyloseq)# prune_taxa is a phyloseq object 
 
 par(mfrow = c(1, 3))
 plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'Shannon')
@@ -156,20 +157,12 @@ V13_phyloseq %>%
 
 
 class(V13_phyloseq)
-dist_matrix<-distance(V13_phyloseq, method='bray')# using the Phyloseq distance matrix 
-cluster<- hclust(dist_matrix) %>%
-  as.dendrogram()
+dist_matrix<- phyloseq::distance(V13_phyloseq, method='bray')# using the Phyloseq distance matrix 
+cluster<- hclust(dist_matrix) 
 cluster_dendrogram <- as.dendrogram(cluster)
 
-cluster_results <- hclust(dist_matrix)
+plot(cluster_dendrogram)
 
-#or  if phyloseq distance method doesn't work, 
-
-# Calculate the Bray-Curtis dissimilarity matrix
-#diss_matrix2 <- vegdist(otu_table(V13_phyloseq), method = "bray") #calculating distance using the distance function in the vegan package
-#cluster2<-hclust(diss_matrix2)
-
-#cluster_dendrogram2 <- as.dendrogram(cluster2)
 
 V13_sample_data<- as.data.frame(sample_data(V13_phyloseq)) #sample data of v13 object as a data frame 
 
@@ -184,9 +177,33 @@ V13_sample_data$labels_col <- ifelse(V13_sample_data$HMP_BODY_SITE == "Oral", "#
 
 plot(cluster_dendrogram, label = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col) # The Bray Curtis is much neater
 
+
+
+color_palette <- c("#F8766D", "#ff80ed", "#065535", "#ffd700", "#00ffff")
+
+# Map colors to HMP_BODY_SITE
+V13_sample_data$labels_col <- color_palette[as.factor(V13_sample_data$HMP_BODY_SITE)]
+
+# Create a subset of the dendrogram for better visualization
+subset_dendrogram <- cutree(cluster, k = 5)
+
+# Plot dendrogram with colored labels
+plot(subset_dendrogram, main = "Hierarchical Clustering Dendrogram",
+     labels = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col)
+
+
+
+
+
+install.packages("ggdendro")
+library(ggdendro)
+#Convert dendrogram to dendextend object
+
+
+
 # Get the OTU table or abundance data
 otu_table <- as.matrix(otu_table(V13_phyloseq))
- 
+
 
 # Get the sample metadata
 sample_data <- sample_data(V13_phyloseq)
@@ -240,19 +257,94 @@ permanova_result <- adonis2(numeric_dist_matrix ~ as.factor(V13_sample_data_df$H
 summary(permanova_result)
 
 
-
+dev.off()
 
 #Principle Coordinates Analysis
 ##ordinate data is Phyloseq's method of scaling  data 
 ###PCoA is a method used to visualize and explore the similarity or dissimilarity of samples based on multivariate data, such as microbiome composition.
-v13_ordinate<- ordinate(V13_phyloseq,'PCoA', distance="bray")
+v13_ordinate<- ordinate(V13_phyloseq,'PCoA', distance="bray", scale=TRUE)
 V13_phyloseq%>%
   plot_ordination(v13_ordinate,color = 'HMP_BODY_SITE', shape= 'HMP_BODY_SITE')+
   theme_bw()+
   theme(legend.position = 'bottom')
 
+
+
+summary(v13_ordinate)
+
+
+
+
+# Extract eigenvalues from the v13_ordinate object
+eigenvalues <- v13_ordinate$values
+
+# Plot the eigenvalues
+barplot(eigenvalues[, 1], main = "Eigenvalues", xlab = "Axis", ylab = "Eigenvalue", names.arg = 1:nrow(eigenvalues))
+
 #silhouette score 
-cluster_assignments <- cutree(cluster_results, 5) #cut into 5 for 5 groups 
+cluster_assignments <- cutree(cluster, 5) #cut into 5 for 5 groups 
 silhouette_scores <- silhouette(cluster_assignments, numeric_dist_matrix)
 summary(silhouette_scores)
 #1: well matched, 0 is close to decision boundary, -1 is could be in wrong cluster
+
+
+#Prediction using Otu table 
+
+
+df <- psmelt(V13_phyloseq)
+df<-na.omit(df)
+rownames(df)<-df$OTU
+df<- df[, -which(names(df) %in% c("OTU", "Sample"))]
+
+# Remove the 'SRS_SAMPLE_ID' column
+df_filtered <- df %>% 
+  select(-SRS_SAMPLE_ID) %>%
+  filter(Abundance > 1) %>%
+  mutate(HMP_BODY_SITE = factor(HMP_BODY_SITE))
+
+
+
+library(randomForest)
+
+library(ROCR)
+
+set.seed(0)
+v13_2 <- dplyr::select(df_filtered, HMP_BODY_SITE,SEX, Abundance,CLASS)
+str(v13_2)
+
+train<- sample(1:nrow(v13_2),0.7*nrow(v13_2))
+V13_train<-(v13_2[train,])
+V13_test<-(v13_2[-train,])
+
+rfmodel <- randomForest(HMP_BODY_SITE ~ ., data = V13_train, 
+                        ntree = 500, importance = TRUE, proximity = TRUE)
+
+# Making predictions on the training set
+v13_train_pred <- predict(rfmodel, V13_train)
+#ROC CURVE 
+perf <- performance(v13_train_pred , "tpr", "fpr" )
+
+plot(perf, main="ROC curve", col=1)
+
+# Checking the accuracy on the training set
+table(v13_train_pred, V13_train$HMP_BODY_SITE)
+
+# Making predictions on the test set
+v13_test_pred <- predict(rfmodel, V13_test)
+#ROC CURVE 
+perf2 <- performance(v13_test_pred , "tpr", "fpr" )
+plot(perf2, main="ROC curve", col=1)
+# Checking the accuracy
+table(v13_test_pred, V13_test$HMP_BODY_SITE)
+
+# Print and plot the variable-importance measures
+importance(rfmodel)
+
+# Open a PDF device
+pdf("Variable_Importance_Plot.pdf", width = 10, height = 8)
+
+# Plot variable importance
+print(varImpPlot(rfmodel, n.var = 5, main = "5 Variable Importance"))
+
+# Close the PDF device
+dev.off()
