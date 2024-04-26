@@ -19,35 +19,28 @@ library(cluster)
 
 
 
-V13<-V13()
+v13<-V13()
 
 
 
-v13metadata(V13) # phyla tree, throwing an error
 
-head(rownames(V13))# name of the otu 
-head(colData(V13)) # more info for each participant 
-head(rowData(V13),n=10) #otu and the different taxonomic annotations 
 
 
 
 #Exploratory data analysis
 #graph showing all the body sites collection in the package 
 
-
-list(V13 = V13(), V35 = V35()) %>%
+list(v13 = V13()) %>%
   table_one() %>%
   kable_one()
 
 
 # pie chat of hmp body site of collection
 v13_body_sites <- colData(v13)$HMP_BODY_SITE
-v35_body_sites <- colData(v35)$HMP_BODY_SITE
-
 
 #adding body sites together 
 
-v13_v15_bodysites<-c(v13_body_sites,v35_body_sites)
+v13_v15_bodysites<-(v13_body_sites)
 v13_v15_bodysites<-na.omit(v13_v15_bodysites)
 
 # frequency of bodysites 
@@ -59,6 +52,9 @@ pie(body.freq,
     labels = paste(names(body.freq), ": ", body.freq),
     col = rainbow(length(body.freq)))
 legend("topright", legend = names(body.freq), fill = rainbow(length(body.freq)))
+
+
+
 
 ##Statistical analysis Permonova or Anosim
 
@@ -154,14 +150,13 @@ V13_phyloseq %>%
   theme(axis.title.x = element_blank())
 
 
-
-
-class(V13_phyloseq)
+#BEta diversity analysis 
 dist_matrix<- phyloseq::distance(V13_phyloseq, method='bray')# using the Phyloseq distance matrix 
-cluster<- hclust(dist_matrix) 
-cluster_dendrogram <- as.dendrogram(cluster)
 
-plot(cluster_dendrogram)
+#Hierarchical Clustering
+cluster<- hclust(dist_matrix) 
+
+
 
 
 V13_sample_data<- as.data.frame(sample_data(V13_phyloseq)) #sample data of v13 object as a data frame 
@@ -175,29 +170,14 @@ V13_sample_data$labels_col <- ifelse(V13_sample_data$HMP_BODY_SITE == "Oral", "#
                                                    ifelse(V13_sample_data$HMP_BODY_SITE == "Urogenital Tract", "#ffd700",
                                                           ifelse(V13_sample_data$HMP_BODY_SITE == "Skin", "#00ffff", "#00BFC4")))))
 
-plot(cluster_dendrogram, label = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col) # The Bray Curtis is much neater
 
-
-
-color_palette <- c("#F8766D", "#ff80ed", "#065535", "#ffd700", "#00ffff")
-
-# Map colors to HMP_BODY_SITE
-V13_sample_data$labels_col <- color_palette[as.factor(V13_sample_data$HMP_BODY_SITE)]
 
 # Create a subset of the dendrogram for better visualization
 subset_dendrogram <- cutree(cluster, k = 5)
-
 # Plot dendrogram with colored labels
-plot(subset_dendrogram, main = "Hierarchical Clustering Dendrogram",
+plot(cluster, main = "Hierarchical Clustering Dendrogram",
      labels = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col)
 
-
-
-
-
-install.packages("ggdendro")
-library(ggdendro)
-#Convert dendrogram to dendextend object
 
 
 
@@ -288,63 +268,116 @@ summary(silhouette_scores)
 #1: well matched, 0 is close to decision boundary, -1 is could be in wrong cluster
 
 
-#Prediction using Otu table 
+#Prediction using random forests model 
+
+df <- psmelt(V13_phyloseq)%>%
+  na.omit(df)
 
 
-df <- psmelt(V13_phyloseq)
-df<-na.omit(df)
-rownames(df)<-df$OTU
-df<- df[, -which(names(df) %in% c("OTU", "Sample"))]
+#Normalied abundance 
+df_normalized <- df %>%
+  group_by(SRS_SAMPLE_ID) %>%
+  mutate(`Relative Abundance` = Abundance / sum(Abundance)) %>%
+  ungroup()
+    
 
-# Remove the 'SRS_SAMPLE_ID' column
-df_filtered <- df %>% 
-  select(-SRS_SAMPLE_ID) %>%
-  filter(Abundance > 1) %>%
-  mutate(HMP_BODY_SITE = factor(HMP_BODY_SITE))
+df_grouped <- df %>%
+  group_by(HMP_BODY_SITE, PHYLUM) %>%
+  summarize(total_abundance = sum(Abundance)) %>%
+  ungroup()
+
+# Rank the genera within each body site based on total abundance
+df_ranked <- df_grouped %>%
+  group_by(HMP_BODY_SITE) %>%
+  mutate(rank = dense_rank(desc(total_abundance))) %>%
+  ungroup()
+
+# Select the top 10 genera for each body site Select the top 10 genera for each body site and rename the rank column
+df_top10 <- df_ranked %>%
+  filter(rank <= 10) %>%
+  select(HMP_BODY_SITE, PHYLUM, total_abundance,rank)
+
+# Optionally, you can arrange the data frame by body site and rank for better visualization
+df_top10 <- df_top10 %>%
+  arrange(HMP_BODY_SITE, rank)
+
+#color code 
+bangcolors <- c("#CC79A7", "#D55E00", "#0072B2", "#F0E442", "#009E73", "#56B4E9",
+                "#E69F00", "#000000", "#CC002E", "#6A3D9A", "#FFD966", "#B2DF8A",
+                "#66C2A5", "#FF7F00", "#8C564B", "#1F78B4", "#FDD0A2", "#E41A1C",
+                "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628", "#999999",
+                "#BEBADA", "#FB8072", "#80B1D3", "#FDB462", "#B3DE69", "#FCCDE5",
+                "#D9D9D9", "#BC80BD", "#CCEBC5", "#FFED6F", "#A1DAB4")
 
 
+# Convert to data frame
+df_top10 <- as.data.frame(df_top10)
+ggplot(data=df_top10) +
+  geom_bar(aes(x=HMP_BODY_SITE, y=total_abundance, fill=PHYLUM), stat="identity")+
+  scale_fill_manual(values=bangcolors) +
+  theme_minimal() +
+  labs(title = "Top 10 Genera by Abundance in Each Body Site")
+  
+
+
+         
+
+#factor categories 
+df_normalized <- df_normalized %>% 
+  mutate(HMP_BODY_SITE = factor(HMP_BODY_SITE))%>% 
+  mutate(SEX= factor(SEX)) %>% 
+  mutate(CLASS= factor(CLASS))%>%
+  mutate(PHYLUM= factor(PHYLUM))%>%
+  mutate(ORDER= factor(ORDER))%>%
+  filter(Abundance > 0) #filter out low abundant species 
+
+
+df_normalized<- as.data.frame(df_normalized) # convert into a data frame 
 
 library(randomForest)
 
-library(ROCR)
 
+#selecting columns for analysis 
+v13_2 <- dplyr::select(df_normalized, HMP_BODY_SITE,OTU,Abundance,CLASS,
+                       PHYLUM, 
+                       ORDER, 
+                       FAMILY, 
+                       GENUS)
 set.seed(0)
-v13_2 <- dplyr::select(df_filtered, HMP_BODY_SITE,SEX, Abundance,CLASS)
-str(v13_2)
-
-train<- sample(1:nrow(v13_2),0.7*nrow(v13_2))
+train<- sample(1:nrow(v13_2),0.8*nrow(v13_2)) # selecting 80% random rows for training 
 V13_train<-(v13_2[train,])
 V13_test<-(v13_2[-train,])
 
-rfmodel <- randomForest(HMP_BODY_SITE ~ ., data = V13_train, 
-                        ntree = 500, importance = TRUE, proximity = TRUE)
+rfmodel <- randomForest(HMP_BODY_SITE ~ ., data = V13_train,ntree = 500, importance = TRUE, proximity = TRUE )
+print(rfmodel)
 
 # Making predictions on the training set
 v13_train_pred <- predict(rfmodel, V13_train)
-#ROC CURVE 
-perf <- performance(v13_train_pred , "tpr", "fpr" )
-
-plot(perf, main="ROC curve", col=1)
 
 # Checking the accuracy on the training set
-table(v13_train_pred, V13_train$HMP_BODY_SITE)
+confusion_matrix<-table(v13_train_pred, V13_train$HMP_BODY_SITE)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(accuracy)
+
 
 # Making predictions on the test set
 v13_test_pred <- predict(rfmodel, V13_test)
-#ROC CURVE 
-perf2 <- performance(v13_test_pred , "tpr", "fpr" )
-plot(perf2, main="ROC curve", col=1)
+
 # Checking the accuracy
-table(v13_test_pred, V13_test$HMP_BODY_SITE)
+confusion_matrix2<-table(v13_test_pred, V13_test$HMP_BODY_SITE)
+accuracy_test <- sum(diag(confusion_matrix2)) / sum(confusion_matrix2)
 
 # Print and plot the variable-importance measures
 importance(rfmodel)
 
 # Open a PDF device
-pdf("Variable_Importance_Plot.pdf", width = 10, height = 8)
+pdf("Variable_Importance_Plottt.pdf", width = 10, height = 8)
 
 # Plot variable importance
 print(varImpPlot(rfmodel, n.var = 5, main = "5 Variable Importance"))
 
 # Close the PDF device
 dev.off()
+
+
+
