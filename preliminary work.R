@@ -34,6 +34,8 @@ list(v13 = V13()) %>%
   table_one() %>%
   kable_one()
 
+# Open a PDF device
+pdf("Pi.pdf", width = 10, height = 8)
 
 # pie chat of hmp body site of collection
 v13_body_sites <- colData(v13)$HMP_BODY_SITE
@@ -54,7 +56,8 @@ pie(body.freq,
 legend("topright", legend = names(body.freq), fill = rainbow(length(body.freq)))
 
 
-
+# Close the PDF device
+dev.off()
 
 ##Statistical analysis Permonova or Anosim
 
@@ -118,8 +121,6 @@ V13_Gastrointestinal_phyloseq %<>%
   sample_samples(25)
 
 
-
-
 #Merging into one object
 V13_phyloseq <-
   merge_phyloseq(V13_oral_phyloseq, V13_skin_phyloseq, V13_Urogenital_phyloseq, V13_Airways_phyloseq, V13_Gastrointestinal_phyloseq)
@@ -129,6 +130,9 @@ V13_phyloseq %<>%
   taxa_sums() %>%
   is_greater_than(0) %>%
   prune_taxa(V13_phyloseq)# prune_taxa is a phyloseq object 
+
+# Open a PDF device
+pdf("alphadiv.pdf", width = 10, height = 8)
 
 par(mfrow = c(1, 3))
 plot_richness(V13_phyloseq, x='HMP_BODY_SITE', color = 'HMP_BODY_SITE', measures = 'Shannon')
@@ -147,8 +151,11 @@ V13_phyloseq %>%
   scale_fill_manual(values = c("red", "blue", "green", "yellow", "purple"),  # Example colors
                     labels = c("Body Site 1", "Body Site 2", "Body Site 3", "Body Site 4", "Body Site 5")) +  # Example labels
   theme_bw() +
-  theme(axis.title.x = element_blank())
+  theme(axis.title.x = element_blank(),  # Remove x-axis title
+        axis.text.x = element_blank())   # Remove x-axis labels
 
+# Close the PDF device
+dev.off()
 
 #BEta diversity analysis 
 dist_matrix<- phyloseq::distance(V13_phyloseq, method='bray')# using the Phyloseq distance matrix 
@@ -164,22 +171,24 @@ V13_sample_data<- as.data.frame(sample_data(V13_phyloseq)) #sample data of v13 o
 #denogram
 #adding the col labels to the sample data frame for the dendrogram 
 ## Adding a color match to each body site in the sample data. color numbers can be gotten from https://www.color-hex.com/popular-colors.php
-V13_sample_data$labels_col <- ifelse(V13_sample_data$HMP_BODY_SITE == "Oral", "#F8766D", 
-                                     ifelse(V13_sample_data$HMP_BODY_SITE == "Gastrointestinal Tract", "#ff80ed",
-                                            ifelse(V13_sample_data$HMP_BODY_SITE == "Airways", "#065535",
-                                                   ifelse(V13_sample_data$HMP_BODY_SITE == "Urogenital Tract", "#ffd700",
-                                                          ifelse(V13_sample_data$HMP_BODY_SITE == "Skin", "#00ffff", "#00BFC4")))))
+V13_sample_data$labels_col <- ifelse(V13_sample_data$HMP_BODY_SITE == "Oral", "#ED5564", 
+                                     ifelse(V13_sample_data$HMP_BODY_SITE == "Gastrointestinal Tract", "#FFCE54",
+                                            ifelse(V13_sample_data$HMP_BODY_SITE == "Airways", "#A0D568",
+                                                   ifelse(V13_sample_data$HMP_BODY_SITE == "Urogenital Tract", "#4FC1E8",
+                                                          ifelse(V13_sample_data$HMP_BODY_SITE == "Skin", "#AC92EB" ,"#00ffff")))))
 
+# Convert labels_col to factor
+V13_sample_data$labels_col <- factor(V13_sample_data$labels_col)
 
+# Open a PDF device
+pdf("dendrogram.pdf", width = 10, height = 8)
 
-# Create a subset of the dendrogram for better visualization
-subset_dendrogram <- cutree(cluster, k = 5)
 # Plot dendrogram with colored labels
 plot(cluster, main = "Hierarchical Clustering Dendrogram",
-     labels = V13_sample_data$HMP_BODY_SITE, col = V13_sample_data$labels_col)
+     labels = V13_sample_data$HMP_BODY_SITE, col = "black", cex = 0.4, col.main = "black")
 
-
-
+# Close the PDF device
+dev.off()
 
 # Get the OTU table or abundance data
 otu_table <- as.matrix(otu_table(V13_phyloseq))
@@ -192,8 +201,14 @@ sample_data <- sample_data(V13_phyloseq)
 # Convert dissimilarity matrix to a numeric matrix
 numeric_dist_matrix <- as.matrix(dist_matrix)
 
+# Open a PDF device
+pdf("heatmap.pdf", width = 10, height = 8)
+
 # Plot heatmap of the numeric matrix
-heatmap(numeric_dist_matrix)
+heatmap(numeric_dist_matrix, main= "Heatmap of Dissimilarity Matrix")
+
+# Close the PDF device
+dev.off()
 
 # Convert into data frame of objects
 V13_sample_data_df <- as.data.frame(V13_sample_data)
@@ -227,8 +242,41 @@ V13_sample_data_df <- data.frame(
   labels_col = col8
 )
 
+#Wilcoxon Rank Sum
 
+# Define the unique body sites
+body_sites <- unique(V13_sample_data$HMP_BODY_SITE)
 
+# Initialize an empty matrix to store p-values
+p_value_matrix <- matrix(NA, nrow = length(body_sites), ncol = length(body_sites))
+
+# Initialize an empty matrix to store p-values
+for (i in 1:5) {
+  for (j in 1:5) {
+    if (i != j) {
+      # Subset row indices for the two body sites
+      rows_subset1 <- which(V13_sample_data_df$HMP_BODY_SITE == body_sites[i])
+      rows_subset2 <- which(V13_sample_data_df$HMP_BODY_SITE == body_sites[j])
+      
+      # Extract taxa sums as numerical vectors
+      subset1_taxa_sums <- taxa_sums(V13_phyloseq)[rows_subset1]
+      subset2_taxa_sums <- taxa_sums(V13_phyloseq)[rows_subset2]
+      
+      # Perform Wilcoxon rank sum test
+      wilcox_result <- wilcox.test(subset1_taxa_sums, subset2_taxa_sums)
+      
+      # Store p-value in the matrix
+      p_value_matrix[i, j] <- wilcox_result$p.value
+    }
+  }
+}
+
+# Add row and column names to the matrix
+rownames(p_value_matrix) <- body_sites
+colnames(p_value_matrix) <- body_sites
+
+# Print the matrix of p-values
+print(p_value_matrix)
 
 # Perform PERMANOVA analysis to examine whether the groupings were statistically significant
 permanova_result <- adonis2(numeric_dist_matrix ~ as.factor(V13_sample_data_df$HMP_BODY_SITE), data = V13_sample_data_df, strata = NULL, permutations = 999) # this is if distance method from phyloseq works, else use the one below
@@ -237,14 +285,17 @@ permanova_result <- adonis2(numeric_dist_matrix ~ as.factor(V13_sample_data_df$H
 summary(permanova_result)
 
 
-dev.off()
 
 #Principle Coordinates Analysis
+# Open a PDF device
+pdf("CoA.pdf", width = 10, height = 8)
+
 ##ordinate data is Phyloseq's method of scaling  data 
 ###PCoA is a method used to visualize and explore the similarity or dissimilarity of samples based on multivariate data, such as microbiome composition.
 v13_ordinate<- ordinate(V13_phyloseq,'PCoA', distance="bray", scale=TRUE)
 V13_phyloseq%>%
   plot_ordination(v13_ordinate,color = 'HMP_BODY_SITE', shape= 'HMP_BODY_SITE')+
+  ggtitle("PCoA Ordination Plot") + 
   theme_bw()+
   theme(legend.position = 'bottom')
 
@@ -253,13 +304,20 @@ V13_phyloseq%>%
 summary(v13_ordinate)
 
 
+# Close the PDF device
+dev.off()
 
+# Open a PDF device
+pdf("eigen.pdf", width = 10, height = 8)
 
 # Extract eigenvalues from the v13_ordinate object
 eigenvalues <- v13_ordinate$values
 
 # Plot the eigenvalues
 barplot(eigenvalues[, 1], main = "Eigenvalues", xlab = "Axis", ylab = "Eigenvalue", names.arg = 1:nrow(eigenvalues))
+
+# Close the PDF device
+dev.off()
 
 #silhouette score 
 cluster_assignments <- cutree(cluster, 5) #cut into 5 for 5 groups 
@@ -309,6 +367,8 @@ bangcolors <- c("#CC79A7", "#D55E00", "#0072B2", "#F0E442", "#009E73", "#56B4E9"
                 "#BEBADA", "#FB8072", "#80B1D3", "#FDB462", "#B3DE69", "#FCCDE5",
                 "#D9D9D9", "#BC80BD", "#CCEBC5", "#FFED6F", "#A1DAB4")
 
+# Open a PDF device
+pdf("abundance.pdf", width = 10, height = 8)
 
 # Convert to data frame
 df_top10 <- as.data.frame(df_top10)
@@ -318,9 +378,8 @@ ggplot(data=df_top10) +
   theme_minimal() +
   labs(title = "Top 10 Genera by Abundance in Each Body Site")
   
-
-
-         
+# Close the PDF device
+dev.off()
 
 #factor categories 
 df_normalized <- df_normalized %>% 
@@ -336,13 +395,13 @@ df_normalized<- as.data.frame(df_normalized) # convert into a data frame
 
 library(randomForest)
 
-
 #selecting columns for analysis 
 v13_2 <- dplyr::select(df_normalized, HMP_BODY_SITE,OTU,Abundance,CLASS,
                        PHYLUM, 
                        ORDER, 
                        FAMILY, 
                        GENUS)
+
 set.seed(0)
 train<- sample(1:nrow(v13_2),0.8*nrow(v13_2)) # selecting 80% random rows for training 
 V13_train<-(v13_2[train,])
@@ -378,6 +437,9 @@ print(varImpPlot(rfmodel, n.var = 5, main = "5 Variable Importance"))
 
 # Close the PDF device
 dev.off()
+
+
+
 
 
 
