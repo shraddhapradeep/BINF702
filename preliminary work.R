@@ -335,7 +335,7 @@ df <- psmelt(V13_phyloseq)%>%
 #Normalied abundance 
 df_normalized <- df %>%
   group_by(SRS_SAMPLE_ID) %>%
-  mutate(`Relative Abundance` = Abundance / sum(Abundance)) %>%
+  mutate(Relative_Abundance = Abundance / sum(Abundance)) %>%
   ungroup()
     
 
@@ -349,6 +349,7 @@ df_ranked <- df_grouped %>%
   group_by(HMP_BODY_SITE) %>%
   mutate(rank = dense_rank(desc(total_abundance))) %>%
   ungroup()
+
 
 # Select the top 10 genera for each body site Select the top 10 genera for each body site and rename the rank column
 df_top10 <- df_ranked %>%
@@ -376,7 +377,7 @@ ggplot(data=df_top10) +
   geom_bar(aes(x=HMP_BODY_SITE, y=total_abundance, fill=PHYLUM), stat="identity")+
   scale_fill_manual(values=bangcolors) +
   theme_minimal() +
-  labs(title = "Top 10 Genera by Abundance in Each Body Site")
+  labs(title = "Top 10 PHYLUM by Abundance in Each Body Site")
   
 # Close the PDF device
 dev.off()
@@ -386,10 +387,8 @@ df_normalized <- df_normalized %>%
   mutate(HMP_BODY_SITE = factor(HMP_BODY_SITE))%>% 
   mutate(SEX= factor(SEX)) %>% 
   mutate(CLASS= factor(CLASS))%>%
-  mutate(PHYLUM= factor(PHYLUM))%>%
   mutate(ORDER= factor(ORDER))%>%
-  filter(Abundance > 0) #filter out low abundant species 
-
+  filter(Relative_Abundance > 0) #filter out low abundant species 
 
 df_normalized<- as.data.frame(df_normalized) # convert into a data frame 
 
